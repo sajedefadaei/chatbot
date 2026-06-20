@@ -1,56 +1,83 @@
 import streamlit as st
-from openai import OpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+# Assuming 'retriever' is correctly imported from your local vector module
+from vector import retriever 
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
-)
+# 1. Page Configuration
+st.set_page_config(page_title="Genetic Variation RAG Assistant", page_icon="🧬")
+st.title("🧬 Genetic Variation RAG Assistant")
+st.write("Ask questions about genetic variations based on your retrieved data.")
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# 2. Initialize Model and Chain (Cached so it doesn't rebuild on every rerun)
+@st.cache_resource
+def init_rag_chain():
+    model = ChatGoogleGenerativeAI(
+        model="gemini-3.5-flash", 
+        google_api_key=...
+    )
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+    template = """You are a helpful assistant for answering questions about genetic variations.
+Use the following context to answer the question.
+You must provide the source of the information in your answer, and you must use all the information provided in the context to answer the question.
+If the context does not contain enough information to answer the question, say "I don't know".
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+Context:
+{reviewed_information}
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+Question: {question}"""
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+    prompt = ChatPromptTemplate.from_template(template)
+    return prompt | model
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+chain = init_rag_chain()
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
+# 3. Initialize Chat History in Session State
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "assistant", "content": "Hello! Ask me anything about the genetic variation documentation."}
+    ]
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+# 4. Display Past Chat Messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# 5. Handle New User Input
+if question := st.chat_input("Enter your question here..."):
+    
+    # Display user message in chat message container
+    with st.chat_message("user"):
+        st.markdown(question)
+    
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": question})
+
+    # Generate response
+    with st.chat_message("assistant"):
+        with st.spinner("Searching context and generating answer..."):
+            try:
+                # Retrieve relevant documents
+                docs = retriever.invoke(question)
+                
+                # Format context strings
+                reviewed_information = "\n\n".join(
+                    [f"[Source {doc.metadata['source'].split('/')[-1].split(".")[0]}] {doc.page_content}" for doc in docs]
+                )
+                
+                # Run the chain
+                results = chain.invoke({
+                    "reviewed_information": reviewed_information, 
+                    "question": question
+                })
+                
+                response_text = results.text
+                
+                # Render the final response
+                st.markdown(response_text)
+                
+                # Add assistant response to chat history
+                st.session_state.messages.append({"role": "assistant", "content": response_text})
+                
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
