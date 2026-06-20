@@ -56,10 +56,9 @@ AutoACMG combines biomedical literature retrieval with LLM-based question answer
 ```
 .
 ├── paper_extraction.ipynb   # Fetch & parse PubMed/PMC articles → .txt files
-├── downloadmodel.py         # Pre-cache the BioBERT embedding model from HuggingFace
 ├── vector.py                # Build ChromaDB vector store; expose retriever
 ├── main.py                  # CLI for interactive terminal Q&A
-├── streamlite_app.py        # Streamlit web chat UI
+├── streamlit_app.py        # Streamlit web chat UI
 ├── pubmed_papers/           # Extracted paper text files (auto-created)
 └── chromadb/                # Persistent ChromaDB vector store (auto-created)
 ```
@@ -77,9 +76,7 @@ AutoACMG combines biomedical literature retrieval with LLM-based question answer
 ### 1. Install Dependencies
 
 ```bash
-pip install streamlit langchain langchain-google-genai langchain-huggingface \
-            langchain-chroma langchain-community chromadb torch \
-            sentence-transformers beautifulsoup4 lxml
+pip install -m requirements.txt
 ```
 
 ### 2. Set API Keys
@@ -88,8 +85,6 @@ pip install streamlit langchain langchain-google-genai langchain-huggingface \
 export GOOGLE_API_KEY="your-gemini-api-key"
 export HF_TOKEN="your-huggingface-token"
 ```
-
-> ⚠️ **Never hard-code API keys in source files.** Use environment variables or a `.env` file with [`python-dotenv`](https://pypi.org/project/python-dotenv/).
 
 ### 3. Fetch Papers
 
@@ -122,7 +117,7 @@ Enter your question (or 'quit' to exit): What are the ACMG criteria for pathogen
 ### Streamlit Web UI
 
 ```bash
-streamlit run streamlite_app.py
+streamlit run streamlit_app.py
 ```
 
 Open `http://localhost:8501` in your browser to use the chat interface.
@@ -158,10 +153,6 @@ Interactive CLI loop. Retrieves context chunks, formats them with source labels,
 
 Streamlit chat UI with session-state conversation history, spinner during retrieval, and markdown-rendered responses.
 
-### `downloadmodel.py`
-
-Standalone utility to pre-download the HuggingFace embedding model before the first indexing run.
-
 ---
 
 ## Configuration
@@ -175,16 +166,6 @@ Standalone utility to pre-download the HuggingFace embedding model before the fi
 | ChromaDB collection | `vector.py` | `Info_variations` |
 | ChromaDB path | `vector.py` | `./chromadb` |
 | LLM | `main.py`, `streamlite_app.py` | `gemini-3.5-flash` |
-
----
-
-## Known Issues
-
-| Issue | Details |
-|-------|---------|
-| **Hard-coded API keys** | `main.py` and `streamlite_app.py` currently embed the Gemini key in source. Replace with `os.environ["GOOGLE_API_KEY"]`. |
-| **`results.text` error** | `ChatGoogleGenerativeAI` returns an `AIMessage`; use `.content` not `.text`. |
-| **Duplicate indexing** | Re-running `python vector.py` appends documents without deduplication. Clear the collection or add an existence check before re-indexing. |
 
 ---
 
