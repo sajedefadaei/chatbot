@@ -76,7 +76,7 @@ AutoACMG combines biomedical literature retrieval with LLM-based question answer
 ### 1. Install Dependencies
 
 ```bash
-pip install -m requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Set API Keys
